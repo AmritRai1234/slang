@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Slang IDE — Animation Studio</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;500;600;700&display=swap');
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #0f0f1a;
+            --panel: #161625;
+            --border: #2a2a3e;
+            --accent: #00d4ff;
+            --accent2: #7c3aed;
+            --text: #e2e8f0;
+            --muted: #64748b;
+            --success: #22c55e;
+            --error: #ef4444;
+            --warning: #f59e0b;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 20px;
+            background: var(--panel);
+            border-bottom: 1px solid var(--border);
+            height: 52px;
+        }
+
+        .header-left { display: flex; align-items: center; gap: 14px; }
+
+        .logo {
+            font-size: 20px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent), var(--accent2));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.5px;
+        }
+
+        .logo-sub { font-size: 12px; color: var(--muted); margin-left: 4px; }
+
+        .header-actions { display: flex; gap: 8px; align-items: center; }
+
+        .btn {
+            padding: 7px 16px;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent), #0099cc);
+            color: #000;
+        }
+        .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+
+        .btn-secondary {
+            background: var(--border);
+            color: var(--text);
+        }
+        .btn-secondary:hover { background: #3a3a5e; }
+
+        .btn-icon {
+            width: 36px; height: 36px;
+            padding: 0; display: flex; align-items: center; justify-content: center;
+            border-radius: 8px; font-size: 16px;
+        }
+
+        /* Main Container */
+        .main {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Editor Panel */
+        .editor-panel {
+            width: 50%;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid var(--border);
+        }
+
+        .editor-toolbar {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 8px 16px;
+            background: var(--panel);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .file-name {
+            font-size: 13px;
+            color: var(--muted);
+            display: flex; align-items: center; gap: 6px;
+        }
+        .file-name span { color: var(--text); font-weight: 500; }
+
+        .editor-container { flex: 1; position: relative; }
+
+        #editor {
+            width: 100%;
+            height: 100%;
+            background: var(--bg);
+            color: var(--text);
+            border: none;
+            outline: none;
+            resize: none;
+            padding: 20px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            line-height: 1.7;
+            tab-size: 4;
+            overflow-y: auto;
+        }
+
+        #editor::placeholder { color: var(--muted); }
+
+        /* Preview Panel */
+        .preview-panel {
+            width: 50%;
+            display: flex;
+            flex-direction: column;
+            background: #0a0a14;
+        }
+
+        .preview-toolbar {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 8px 16px;
+            background: var(--panel);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .preview-stats {
+            display: flex; gap: 16px;
+            font-size: 12px; color: var(--muted);
+        }
+        .preview-stats .stat-value { color: var(--accent); font-weight: 600; }
+
+        .preview-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #preview-canvas {
+            max-width: 100%;
+            max-height: 100%;
+            border-radius: 8px;
+            box-shadow: 0 0 40px rgba(0, 212, 255, 0.1);
+            image-rendering: auto;
+        }
+
+        .preview-placeholder {
+            text-align: center;
+            color: var(--muted);
+        }
+        .preview-placeholder .icon { font-size: 64px; margin-bottom: 16px; opacity: 0.3; }
+        .preview-placeholder p { font-size: 14px; }
+
+        /* Timeline */
+        .timeline {
+            padding: 10px 16px;
+            background: var(--panel);
+            border-top: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .timeline-controls { display: flex; gap: 6px; }
+        .timeline-controls button {
+            width: 32px; height: 32px;
+            border: none; border-radius: 6px;
+            background: var(--border);
+            color: var(--text);
+            cursor: pointer;
+            font-size: 14px;
+            display: flex; align-items: center; justify-content: center;
+            transition: background 0.2s;
+        }
+        .timeline-controls button:hover { background: #3a3a5e; }
+        .timeline-controls button.active { background: var(--accent); color: #000; }
+
+        .timeline-slider {
+            flex: 1;
+            -webkit-appearance: none;
+            height: 6px;
+            background: var(--border);
+            border-radius: 3px;
+            outline: none;
+        }
+        .timeline-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px; height: 16px;
+            background: var(--accent);
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        .timeline-time {
+            font-size: 12px;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--muted);
+            min-width: 100px;
+            text-align: right;
+        }
+
+        /* Status Bar */
+        .status-bar {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 4px 16px;
+            background: var(--panel);
+            border-top: 1px solid var(--border);
+            font-size: 11px;
+            color: var(--muted);
+            height: 28px;
+        }
+
+        .status-indicator {
+            display: inline-flex; align-items: center; gap: 5px;
+        }
+        .status-dot {
+            width: 7px; height: 7px; border-radius: 50%;
+            background: var(--success);
+        }
+        .status-dot.error { background: var(--error); }
+        .status-dot.rendering { background: var(--warning); animation: pulse 1s infinite; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        /* Loader overlay */
+        .loader-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(10, 10, 20, 0.8);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 12px;
+            z-index: 10;
+        }
+        .loader-overlay.active { display: flex; }
+
+        .spinner {
+            width: 40px; height: 40px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .error-toast {
+            position: fixed;
+            bottom: 40px; right: 20px;
+            background: #1e1e2e;
+            border: 1px solid var(--error);
+            border-radius: 10px;
+            padding: 12px 20px;
+            font-size: 13px;
+            color: var(--error);
+            display: none;
+            z-index: 100;
+            max-width: 400px;
+            animation: slideIn 0.3s ease;
+        }
+        @keyframes slideIn { from { transform: translateX(100px); opacity: 0; } }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-left">
+            <span class="logo">⚡ Slang IDE</span>
+            <span class="logo-sub">Animation Studio</span>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-secondary" onclick="loadExample('hello')">Hello World</button>
+            <button class="btn btn-secondary" onclick="loadExample('math')">Math Demo</button>
+            <button class="btn btn-secondary" onclick="loadExample('shapes')">Shapes</button>
+            <button class="btn btn-secondary" onclick="loadExample('waves')">Waves</button>
+            <button class="btn btn-secondary" onclick="loadExample('plotting')">Plotting</button>
+            <button class="btn btn-secondary" onclick="loadExample('gradients')">Gradients</button>
+            <button class="btn btn-secondary" onclick="loadExample('manim')">Manim</button>
+            <button class="btn btn-primary" onclick="renderPreview()" id="render-btn">▶ Render</button>
+        </div>
+    </div>
+
+    <div class="main">
+        <div class="editor-panel">
+            <div class="editor-toolbar">
+                <div class="file-name">📄 <span>untitled.sl</span></div>
+                <div style="display:flex;gap:6px;align-items:center;">
+                    <span style="font-size:11px;color:var(--muted)">Ctrl+Enter to render</span>
+                </div>
+            </div>
+            <div class="editor-container">
+                <textarea id="editor" spellcheck="false" placeholder="# Write your Slang code here..."></textarea>
+            </div>
+        </div>
+
+        <div class="preview-panel">
+            <div class="preview-toolbar">
+                <span style="font-size:13px;font-weight:500;">Preview</span>
+                <div class="preview-stats">
+                    <span>Frames: <span class="stat-value" id="stat-frames">0</span></span>
+                    <span>Duration: <span class="stat-value" id="stat-duration">0s</span></span>
+                    <span>Scenes: <span class="stat-value" id="stat-scenes">0</span></span>
+                </div>
+            </div>
+            <div class="preview-container">
+                <div class="loader-overlay" id="loader">
+                    <div class="spinner"></div>
+                    <span style="color:var(--muted);font-size:13px;">Rendering preview...</span>
+                </div>
+                <div class="preview-placeholder" id="placeholder">
+                    <div class="icon">🎬</div>
+                    <p>Click <strong>▶ Render</strong> or press <strong>Ctrl+Enter</strong></p>
+                    <p style="margin-top:8px;font-size:12px;">Write Slang code on the left, see the animation here</p>
+                </div>
+                <img id="preview-canvas" style="display:none;" alt="Preview" />
+            </div>
+            <div class="timeline">
+                <div class="timeline-controls">
+                    <button id="play-btn" onclick="togglePlay()">▶</button>
+                    <button onclick="firstFrame()">⏮</button>
+                    <button onclick="lastFrame()">⏭</button>
+                </div>
+                <input type="range" class="timeline-slider" id="timeline" min="0" max="0" value="0"
+                       oninput="seekFrame(this.value)" />
+                <div class="timeline-time" id="time-display">0:00.0 / 0:00.0</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="status-bar">
+        <div class="status-indicator">
+            <div class="status-dot" id="status-dot"></div>
+            <span id="status-text">Ready</span>
+        </div>
+        <span>Slang v0.1.0 • Preview: 480p@15fps</span>
+    </div>
+
+    <div class="error-toast" id="error-toast"></div>
+
+    <script>
+        const editor = document.getElementById('editor');
+        const canvas = document.getElementById('preview-canvas');
+        const placeholder = document.getElementById('placeholder');
+        const loader = document.getElementById('loader');
+        const timeline = document.getElementById('timeline');
+        const playBtn = document.getElementById('play-btn');
+        const timeDisplay = document.getElementById('time-display');
+
+        let frames = [];
+        let currentFrame = 0;
+        let isPlaying = false;
+        let playInterval = null;
+        let totalFrames = 0;
+        let fps = 15;
+        let renderTimeout = null;
+
+        // Load initial code
+        editor.value = `{{INITIAL_CODE}}`;
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                renderPreview();
+            }
+            if (e.key === ' ' && document.activeElement !== editor) {
+                e.preventDefault();
+                togglePlay();
+            }
+        });
+
+        // Auto-render with debounce
+        editor.addEventListener('input', () => {
+            clearTimeout(renderTimeout);
+            renderTimeout = setTimeout(() => {
+                renderPreview();
+            }, 1500);
+        });
+
+        async function renderPreview() {
+            const code = editor.value;
+            if (!code.trim()) return;
+
+            setStatus('rendering', 'Rendering...');
+            loader.classList.add('active');
+            stopPlay();
+
+            try {
+                const response = await fetch('/render', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code })
+                });
+
+                const data = await response.json();
+
+                if (data.error) {
+                    showError(data.error);
+                    setStatus('error', 'Error');
+                    loader.classList.remove('active');
+                    return;
+                }
+
+                frames = data.frames || [];
+                totalFrames = data.totalFrames || frames.length;
+                fps = data.fps || 15;
+
+                document.getElementById('stat-frames').textContent = totalFrames;
+                document.getElementById('stat-duration').textContent = (data.duration || 0).toFixed(1) + 's';
+                document.getElementById('stat-scenes').textContent = data.scenes || 0;
+
+                timeline.max = frames.length - 1;
+                timeline.value = 0;
+                currentFrame = 0;
+
+                if (frames.length > 0) {
+                    showFrame(0);
+                    placeholder.style.display = 'none';
+                    canvas.style.display = 'block';
+                }
+
+                setStatus('ok', `Rendered ${totalFrames} frames`);
+            } catch (err) {
+                showError('Failed to connect to server: ' + err.message);
+                setStatus('error', 'Connection error');
+            }
+
+            loader.classList.remove('active');
+        }
+
+        function showFrame(idx) {
+            if (idx >= 0 && idx < frames.length) {
+                canvas.src = 'data:image/png;base64,' + frames[idx];
+                currentFrame = idx;
+                timeline.value = idx;
+                updateTimeDisplay();
+            }
+        }
+
+        function seekFrame(idx) {
+            showFrame(parseInt(idx));
+        }
+
+        function togglePlay() {
+            if (isPlaying) {
+                stopPlay();
+            } else {
+                startPlay();
+            }
+        }
+
+        function startPlay() {
+            if (frames.length === 0) return;
+            isPlaying = true;
+            playBtn.textContent = '⏸';
+            playBtn.classList.add('active');
+
+            const interval = 1000 / fps;
+            playInterval = setInterval(() => {
+                currentFrame++;
+                if (currentFrame >= frames.length) {
+                    currentFrame = 0;
+                }
+                showFrame(currentFrame);
+            }, interval);
+        }
+
+        function stopPlay() {
+            isPlaying = false;
+            playBtn.textContent = '▶';
+            playBtn.classList.remove('active');
+            if (playInterval) {
+                clearInterval(playInterval);
+                playInterval = null;
+            }
+        }
+
+        function firstFrame() { stopPlay(); showFrame(0); }
+        function lastFrame() { stopPlay(); showFrame(frames.length - 1); }
+
+        function updateTimeDisplay() {
+            const current = currentFrame / fps;
+            const total = frames.length / fps;
+            timeDisplay.textContent = `${formatTime(current)} / ${formatTime(total)}`;
+        }
+
+        function formatTime(seconds) {
+            const min = Math.floor(seconds / 60);
+            const sec = (seconds % 60).toFixed(1);
+            return `${min}:${sec.padStart(4, '0')}`;
+        }
+
+        function setStatus(type, text) {
+            const dot = document.getElementById('status-dot');
+            const statusText = document.getElementById('status-text');
+            dot.className = 'status-dot';
+            if (type === 'error') dot.classList.add('error');
+            if (type === 'rendering') dot.classList.add('rendering');
+            statusText.textContent = text;
+        }
+
+        function showError(msg) {
+            const toast = document.getElementById('error-toast');
+            toast.textContent = '❌ ' + msg;
+            toast.style.display = 'block';
+            setTimeout(() => { toast.style.display = 'none'; }, 5000);
+        }
+
+        function loadExample(name) {
+            const examples = {
+                hello: `# Hello World Animation
+scene "Hello Slang"
+
+set background to dark blue
+set fps to 15
+
+draw a circle at center with radius 100 color cyan
+fade in the circle over 1 second
+
+wait 0.5 seconds
+
+write "Hello, Slang!" at top color white size 48 over 1 second
+
+wait 1 second
+
+move the circle to right over 1 second
+
+draw a square at left with size 80 color yellow
+fade in the square over 0.5 seconds
+
+wait 1 second
+
+change color of the circle to orange over 1 second
+
+wait 0.5 seconds
+
+fade out everything over 1 second`,
+
+                math: `# Math Animation
+scene "Pythagorean Theorem"
+
+set background to dark blue
+set fps to 15
+
+draw a triangle at center with size 200 color cyan
+fade in the triangle over 1 second
+
+wait 0.5 seconds
+
+write "The Pythagorean Theorem" at top color white size 48 over 1 second
+
+wait 0.5 seconds
+
+draw math "a^{2} + b^{2} = c^{2}" at bottom color yellow size 64
+fade in the math over 1.5 seconds
+
+wait 2 seconds
+
+fade out everything over 1 second`,
+
+                shapes: `# Shapes Animation
+scene "Shape Gallery"
+
+set background to dark blue
+set fps to 15
+
+write "Shape Gallery" at top color white size 48 over 1 second
+wait 0.5 seconds
+
+draw a circle at left with radius 80 color red
+fade in the circle over 0.5 seconds
+
+draw a square at center with size 140 color green
+fade in the square over 0.5 seconds
+
+draw a triangle at right with size 160 color blue
+fade in the triangle over 0.5 seconds
+
+wait 1 second
+
+change color of the circle to yellow over 1 second
+change color of the square to purple over 1 second
+change color of the triangle to cyan over 1 second
+
+wait 1 second
+
+scale the square to 1.5 x over 0.5 seconds
+
+wait 1 second
+
+fade out everything over 1 second`,
+
+                waves: `# Waves & Easing Demo
+scene "Wave Mathematics"
+
+set background to dark blue
+set fps to 15
+
+write "Waves & Easing" at top color white size 56 over 1 second
+
+wait 0.5 seconds
+
+# Draw coordinate grid
+draw a grid at center with size 400 color grey thickness 1
+fade in the grid over 0.5 seconds
+
+wait 0.5 seconds
+
+# Draw a sine wave
+draw a wave at center with size 600 amplitude 80 frequency 3 color cyan thickness 3
+fade in the wave over 1 second
+
+wait 1 second
+
+# Show the equation
+draw math "y = A sin(\\omega x)" at bottom color yellow size 48
+fade in the math over 1.5 seconds
+
+wait 1 second
+
+# Bounce a circle into view
+draw a circle at (200, 340) with radius 30 color orange
+fade in the circle over 0.5 seconds easing bounce
+
+wait 0.5 seconds
+
+# Spring a square in
+draw a square at (700, 340) with size 50 color pink
+fade in the square over 0.5 seconds easing spring
+
+wait 1 second
+
+# Move with elastic easing
+move the circle to (500, 340) over 1.5 seconds easing elastic
+
+wait 1 second
+
+fade out everything over 1 second`,
+
+                plotting: `# Function Plotting Demo
+scene "Math Functions"
+
+set background to dark blue
+set fps to 15
+
+write "Function Plotting" at top color white size 48 over 1 second
+
+wait 0.5 seconds
+
+# Draw axes
+draw axes at center with size 600 color grey thickness 2
+fade in the axes over 0.5 seconds
+
+wait 0.5 seconds
+
+# Plot sin(x) in cyan
+plot "sin({x})" from -5 to 5 color cyan thickness 3 over 2 seconds
+
+wait 0.5 seconds
+
+# Plot x^2 / 5 in yellow
+plot "{x}^2 / 5" from -5 to 5 color yellow thickness 3 over 2 seconds
+
+wait 0.5 seconds
+
+draw math "f(x) = sin(x)" at bottom color cyan size 36
+fade in the math over 1 second
+
+wait 2 seconds
+
+fade out everything over 1 second`,
+
+                gradients: `# Gradients & Pro Easing Demo
+scene "Gradient Showcase"
+
+set background to gradient blue purple
+set fps to 15
+
+write "Gradient Backgrounds" at top color white size 48 over 1 second
+
+wait 0.5 seconds
+
+draw a circle at center with radius 80 color cyan
+fade in the circle over 1 second easing ease-out-expo
+
+wait 0.5 seconds
+
+move the circle to left over 1.5 seconds easing ease-in-out-quart
+
+wait 0.5 seconds
+
+draw a square at right with size 100 color yellow
+fade in the square over 1 second easing ease-out-bounce
+
+wait 0.5 seconds
+
+draw a triangle at center with size 120 color pink
+scale the triangle to 1.5 x over 1 second easing ease-out-elastic
+
+wait 0.5 seconds
+
+rotate the triangle by 360 over 2 seconds easing ease-in-out-circ
+
+wait 1 second
+
+fade out everything over 1.5 seconds easing ease-in-expo`,
+
+                manim: `# Manim-Style Animations
+scene "Manim Showcase"
+
+set background to gradient dark blue purple
+set fps to 30
+
+write "Manim Animations" at top color white size 48 over 1 second
+
+wait 0.5 seconds
+
+draw a circle at center with radius 60 color cyan
+grow in the circle over 1 second
+
+wait 0.5 seconds
+
+indicate the circle over 0.8 seconds
+
+wait 0.5 seconds
+
+wiggle the circle over 0.6 seconds
+
+wait 0.5 seconds
+
+draw a square at right with size 100 color yellow
+spin in the square over 1.5 seconds
+
+wait 0.5 seconds
+
+draw a triangle at left with size 120 color pink
+spiral in the triangle over 1.5 seconds
+
+wait 0.5 seconds
+
+circumscribe the circle color yellow over 1 second
+
+wait 0.5 seconds
+
+fade out everything over 1 second`
+            };
+
+            editor.value = examples[name] || examples.hello;
+            renderPreview();
+        }
+    </script>
+</body>
+</html>

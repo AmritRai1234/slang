@@ -1,0 +1,20 @@
+[package]
+name = "slang"
+version = "0.1.0"
+edition = "2021"
+description = "Slang — a plain-English animation language that compiles to Rust"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+tiny-skia = "0.11"
+ab_glyph = "0.2"
+image = { version = "0.25", default-features = false, features = ["png"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tiny_http = "0.12"
+notify = "7"
+base64 = "0.22"
+exmex = "0.20"
+keyframe = "1.1"
+noise = "0.9"
+colorgrad = "0.7"
