@@ -23,6 +23,13 @@ pub enum TokenKind {
     Wiggle,
     Circumscribe,
     Spiral,
+    Morph,
+    Into,
+    Zoom,
+    Pan,
+    Emit,
+    Particles,
+    Count,
 
     // Connectors
     To,

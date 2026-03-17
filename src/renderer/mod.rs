@@ -100,6 +100,12 @@ impl Renderer {
                     );
                     frames.extend(plot_frames);
                 }
+                Statement::Emit { position, color, count, duration } => {
+                    let emit_frames = self.render_emit(
+                        &mut state, position, color, *count, *duration,
+                    );
+                    frames.extend(emit_frames);
+                }
             }
         }
 
@@ -167,8 +173,24 @@ impl Renderer {
         // Draw background (solid, gradient, noise, or radial)
         backgrounds::draw_background(&mut pixmap, &self.background, self.frame_index);
 
+        // Apply camera transform
+        let cam_zoom = state.camera_zoom;
+        let cam_ox = state.camera_x;
+        let cam_oy = state.camera_y;
+        let cx = w as f64 / 2.0;
+        let cy = h as f64 / 2.0;
+
         for obj in &state.objects {
-            shapes::draw_object(&mut pixmap, obj, w as f64, h as f64, &self.text_renderer);
+            if cam_zoom != 1.0 || cam_ox != 0.0 || cam_oy != 0.0 {
+                // Create a camera-adjusted copy of the object
+                let mut adj = obj.clone();
+                adj.x = cx + (obj.x - cx - cam_ox) * cam_zoom;
+                adj.y = cy + (obj.y - cy - cam_oy) * cam_zoom;
+                adj.scale = obj.scale * cam_zoom;
+                shapes::draw_object(&mut pixmap, &adj, w as f64, h as f64, &self.text_renderer);
+            } else {
+                shapes::draw_object(&mut pixmap, obj, w as f64, h as f64, &self.text_renderer);
+            }
         }
 
         pixmap.data().to_vec()
@@ -192,6 +214,11 @@ impl Renderer {
             .map(|&idx| state.objects[idx].clone())
             .collect();
 
+        // Capture initial camera state for zoom/pan
+        let initial_camera_zoom = state.camera_zoom;
+        let initial_camera_x = state.camera_x;
+        let initial_camera_y = state.camera_y;
+
         for frame_i in 0..frame_count {
             let raw_t = (frame_i as f64 + 1.0) / frame_count as f64;
             let t = animation::apply_easing(raw_t, easing_name);
@@ -204,6 +231,21 @@ impl Renderer {
                 if matches!(kind, AnimKind::WaveAnimate) {
                     state.objects[idx].wave_progress = raw_t;
                 }
+            }
+
+            // Camera zoom/pan interpolation
+            match kind {
+                AnimKind::ZoomTo(factor) => {
+                    state.camera_zoom = animation::lerp(initial_camera_zoom, *factor, t);
+                }
+                AnimKind::PanTo(ref position) => {
+                    let (tx, ty) = position.resolve(self.width as f64, self.height as f64);
+                    let cx = self.width as f64 / 2.0;
+                    let cy = self.height as f64 / 2.0;
+                    state.camera_x = animation::lerp(initial_camera_x, tx - cx, t);
+                    state.camera_y = animation::lerp(initial_camera_y, ty - cy, t);
+                }
+                _ => {}
             }
 
             frames.push(self.render_frame(state));
@@ -301,6 +343,89 @@ impl Renderer {
         }
 
         state.objects[plot_idx].wave_progress = 1.0;
+
+        frames
+    }
+
+    fn render_emit(
+        &self,
+        state: &mut SceneState,
+        position: &Position,
+        color: &ColorValue,
+        count: usize,
+        duration: f64,
+    ) -> Vec<Vec<u8>> {
+        let frame_count = (duration * self.fps as f64) as usize;
+        let frame_count = frame_count.max(1);
+        let mut frames = Vec::with_capacity(frame_count);
+
+        let (px, py) = position.resolve(self.width as f64, self.height as f64);
+        let base_color = color.to_rgba();
+
+        // Generate particles with deterministic pseudo-random positions
+        struct Particle {
+            angle: f64,
+            speed: f64,
+            size: f64,
+        }
+        let particles: Vec<Particle> = (0..count).map(|i| {
+            let hash = ((i * 2654435761) ^ (i * 40503)) as f64;
+            let angle = (hash % 1000.0) / 1000.0 * std::f64::consts::TAU;
+            let speed = 50.0 + (hash % 200.0);
+            let size = 2.0 + (hash % 6.0);
+            Particle { angle, speed, size }
+        }).collect();
+
+        // Add particle objects
+        let first_idx = state.objects.len();
+        for p in &particles {
+            state.add_shape(
+                None,
+                ShapeKind::Circle,
+                Position::Coords(px, py),
+                vec![
+                    ShapeProp::Color(color.clone()),
+                    ShapeProp::Radius(p.size),
+                ],
+                None,
+            );
+        }
+
+        // Animate particles spreading and fading
+        for frame_i in 0..frame_count {
+            let t = (frame_i as f64 + 1.0) / frame_count as f64;
+            let eased = animation::ease_in_out(t);
+
+            for (i, p) in particles.iter().enumerate() {
+                let idx = first_idx + i;
+                if idx < state.objects.len() {
+                    let spread = eased * p.speed;
+                    state.objects[idx].x = px + spread * p.angle.cos();
+                    state.objects[idx].y = py + spread * p.angle.sin();
+                    // Fade out in the second half
+                    state.objects[idx].opacity = if t < 0.5 { 1.0 } else { animation::lerp(1.0, 0.0, (t - 0.5) * 2.0) };
+                    // Shrink as they spread
+                    state.objects[idx].scale = animation::lerp(1.0, 0.3, t);
+                    // Slight color variation
+                    let brightness = animation::lerp(1.0, 0.5, t);
+                    state.objects[idx].color = [
+                        (base_color[0] as f64 * brightness) as u8,
+                        (base_color[1] as f64 * brightness) as u8,
+                        (base_color[2] as f64 * brightness) as u8,
+                        base_color[3],
+                    ];
+                }
+            }
+
+            frames.push(self.render_frame(state));
+        }
+
+        // Remove particles after animation
+        for _ in 0..count {
+            if state.objects.len() > first_idx {
+                state.objects.pop();
+            }
+        }
 
         frames
     }

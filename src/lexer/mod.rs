@@ -236,6 +236,13 @@ impl Lexer {
             "wiggle" => TokenKind::Wiggle,
             "circumscribe" => TokenKind::Circumscribe,
             "spiral" => TokenKind::Spiral,
+            "morph" => TokenKind::Morph,
+            "into" => TokenKind::Into,
+            "zoom" => TokenKind::Zoom,
+            "pan" => TokenKind::Pan,
+            "emit" => TokenKind::Emit,
+            "particles" | "particle" => TokenKind::Particles,
+            "count" => TokenKind::Count,
 
             // Connectors
             "to" => TokenKind::To,

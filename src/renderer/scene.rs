@@ -23,6 +23,9 @@ pub struct SceneObject {
     pub amplitude: f64,
     pub frequency: f64,
     pub wave_progress: f64,
+    /// Morph fields
+    pub morph_target: Option<ShapeKind>,
+    pub morph_progress: f64,
 }
 
 impl SceneObject {
@@ -39,6 +42,10 @@ pub struct SceneState {
     canvas_w: f64,
     canvas_h: f64,
     styles: HashMap<String, Vec<StyleProp>>,
+    /// Camera state
+    pub camera_x: f64,
+    pub camera_y: f64,
+    pub camera_zoom: f64,
 }
 
 impl SceneState {
@@ -49,6 +56,9 @@ impl SceneState {
             canvas_w: w,
             canvas_h: h,
             styles: HashMap::new(),
+            camera_x: 0.0,
+            camera_y: 0.0,
+            camera_zoom: 1.0,
         }
     }
 
@@ -134,6 +144,8 @@ impl SceneState {
             amplitude,
             frequency,
             wave_progress: 1.0,
+            morph_target: None,
+            morph_progress: 0.0,
         };
 
         self.next_id += 1;

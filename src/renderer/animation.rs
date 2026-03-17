@@ -299,5 +299,27 @@ pub fn apply_animation(
             obj.opacity = lerp(0.0, 1.0, t.min(0.3) * (1.0 / 0.3)); // fade in early
             obj.scale = lerp(0.3, initial.scale, t);
         }
+
+        // --- New animations ---
+
+        AnimKind::MorphInto(target_shape) => {
+            // Morph: interpolate between shapes
+            // We store the morph progress and target shape on the object
+            obj.morph_progress = t;
+            obj.morph_target = Some(target_shape.clone());
+            // Subtle scale pulse during morph
+            let pulse = if t < 0.5 { t * 2.0 } else { 2.0 - t * 2.0 };
+            obj.scale = initial.scale * (1.0 + 0.1 * pulse);
+            // Slight rotation during morph
+            obj.rotation = initial.rotation + 15.0 * pulse;
+        }
+        AnimKind::ZoomTo(_factor) => {
+            // Camera zoom is handled at the scene level in the renderer
+            // The animation progress is used to interpolate camera_zoom
+        }
+        AnimKind::PanTo(_position) => {
+            // Camera pan is handled at the scene level in the renderer
+            // The animation progress is used to interpolate camera_x, camera_y
+        }
     }
 }

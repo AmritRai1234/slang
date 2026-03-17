@@ -57,6 +57,13 @@ pub enum Statement {
         thickness: f64,
         duration: f64,
     },
+    /// Emit particles
+    Emit {
+        position: Position,
+        color: ColorValue,
+        count: usize,
+        duration: f64,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -146,6 +153,13 @@ pub enum AnimKind {
     Circumscribe(ColorValue),
     /// SpiralIn — spiral from off-screen to position
     SpiralIn,
+    // --- New animations ---
+    /// Morph one shape into another
+    MorphInto(ShapeKind),
+    /// Zoom camera to a scale factor
+    ZoomTo(f64),
+    /// Pan camera to a position
+    PanTo(Position),
 }
 
 #[derive(Debug, Clone)]

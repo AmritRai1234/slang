@@ -95,6 +95,11 @@ impl Parser {
             TokenKind::Wiggle => self.parse_wiggle(),
             TokenKind::Circumscribe => self.parse_circumscribe(),
             TokenKind::Spiral => self.parse_spiral(),
+            // New animations
+            TokenKind::Morph => self.parse_morph(),
+            TokenKind::Zoom => self.parse_zoom(),
+            TokenKind::Pan => self.parse_pan(),
+            TokenKind::Emit => self.parse_emit(),
             // "spin in" and "draw in" start with Identifier
             TokenKind::Identifier => {
                 let word = self.current().value.clone().unwrap_or_default();
@@ -688,6 +693,115 @@ impl Parser {
             target,
             duration,
             easing,
+        })
+    }
+
+    // morph the circle into a square over 2 seconds
+    fn parse_morph(&mut self) -> Result<Statement, ParseError> {
+        self.advance(); // skip 'morph'
+        self.skip_article();
+        let target = self.parse_target()?;
+
+        // expect 'into'
+        if !self.is_line_end() && self.current().kind == TokenKind::Into {
+            self.advance();
+        }
+        self.skip_article();
+
+        let shape = self.parse_shape_kind()?;
+        let (duration, easing) = self.parse_duration()?;
+
+        Ok(Statement::Animate {
+            kind: AnimKind::MorphInto(shape),
+            target,
+            duration,
+            easing: easing.clone(),
+        })
+    }
+
+    // zoom in to 2x over 1 second
+    // zoom out to 1x over 1 second
+    fn parse_zoom(&mut self) -> Result<Statement, ParseError> {
+        self.advance(); // skip 'zoom'
+        // optional 'in' or 'out'
+        if !self.is_line_end() && (self.current().kind == TokenKind::In || self.current().kind == TokenKind::Out) {
+            self.advance();
+        }
+        self.expect(TokenKind::To)?;
+        let factor = self.expect_number()?;
+        // skip optional 'x'
+        if !self.is_line_end() && self.current().kind == TokenKind::XSuffix {
+            self.advance();
+        }
+        let (duration, easing) = self.parse_duration()?;
+
+        Ok(Statement::Animate {
+            kind: AnimKind::ZoomTo(factor),
+            target: Target::Everything,
+            duration,
+            easing: easing.clone(),
+        })
+    }
+
+    // pan to center over 1 second
+    // pan to (500, 300) over 1.5 seconds
+    fn parse_pan(&mut self) -> Result<Statement, ParseError> {
+        self.advance(); // skip 'pan'
+        self.expect(TokenKind::To)?;
+        let position = self.parse_position()?;
+        let (duration, easing) = self.parse_duration()?;
+
+        Ok(Statement::Animate {
+            kind: AnimKind::PanTo(position),
+            target: Target::Everything,
+            duration,
+            easing: easing.clone(),
+        })
+    }
+
+    // emit particles at center color cyan count 50 over 2 seconds
+    fn parse_emit(&mut self) -> Result<Statement, ParseError> {
+        self.advance(); // skip 'emit'
+        // optional 'particles'
+        if !self.is_line_end() && self.current().kind == TokenKind::Particles {
+            self.advance();
+        }
+
+        let mut position = Position::Center;
+        let mut color = ColorValue::Named("white".to_string());
+        let mut count: usize = 30;
+        let mut duration = 1.5;
+
+        while !self.is_line_end() {
+            match self.current().kind {
+                TokenKind::At => {
+                    self.advance();
+                    position = self.parse_position()?;
+                }
+                TokenKind::Color => {
+                    self.advance();
+                    color = self.parse_color_value()?;
+                }
+                TokenKind::Count => {
+                    self.advance();
+                    count = self.expect_number()? as usize;
+                }
+                TokenKind::Over => {
+                    self.advance();
+                    duration = self.expect_number()?;
+                    if !self.is_line_end() && self.current().kind == TokenKind::Second {
+                        self.advance();
+                    }
+                }
+                _ => { self.advance(); }
+            }
+        }
+
+        Ok(Statement::Emit {
+            position,
+            color,
+            count,
+            duration,
         })
     }
 
