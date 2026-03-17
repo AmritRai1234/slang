@@ -75,6 +75,13 @@
         }
         .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
 
+        .btn-download {
+            background: linear-gradient(135deg, #22c55e, #16a34a);
+            color: #fff;
+        }
+        .btn-download:hover { opacity: 0.9; transform: translateY(-1px); }
+        .btn-download:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
         .btn-secondary {
             background: var(--border);
             color: var(--text);
@@ -116,25 +123,52 @@
         }
         .file-name span { color: var(--text); font-weight: 500; }
 
-        .editor-container { flex: 1; position: relative; }
+        .editor-container { flex: 1; position: relative; overflow: hidden; }
 
-        #editor {
+        #editor, #highlight-layer {
             width: 100%;
             height: 100%;
-            background: var(--bg);
-            color: var(--text);
-            border: none;
-            outline: none;
-            resize: none;
             padding: 20px;
             font-family: 'JetBrains Mono', monospace;
             font-size: 14px;
             line-height: 1.7;
             tab-size: 4;
+            border: none;
+            margin: 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
             overflow-y: auto;
         }
 
+        #highlight-layer {
+            position: absolute;
+            top: 0; left: 0;
+            pointer-events: none;
+            color: transparent;
+            background: var(--bg);
+            z-index: 0;
+        }
+
+        #editor {
+            position: relative;
+            background: transparent;
+            color: transparent;
+            caret-color: var(--text);
+            outline: none;
+            resize: none;
+            z-index: 1;
+        }
+
         #editor::placeholder { color: var(--muted); }
+
+        /* Syntax highlighting token colors */
+        .hl-comment  { color: #6a9955; font-style: italic; }
+        .hl-keyword  { color: #00d4ff; font-weight: 600; }
+        .hl-string   { color: #ce9178; }
+        .hl-number   { color: #f59e0b; }
+        .hl-modifier { color: #c084fc; }
+        .hl-color    { color: #f472b6; }
+        .hl-plain    { color: #e2e8f0; }
 
         /* Preview Panel */
         .preview-panel {
@@ -311,6 +345,7 @@
             <button class="btn btn-secondary" onclick="loadExample('gradients')">Gradients</button>
             <button class="btn btn-secondary" onclick="loadExample('manim')">Manim</button>
             <button class="btn btn-primary" onclick="renderPreview()" id="render-btn">▶ Render</button>
+            <button class="btn btn-download" onclick="downloadMP4()" id="download-btn">⬇ Download MP4</button>
         </div>
     </div>
 
@@ -323,6 +358,7 @@
                 </div>
             </div>
             <div class="editor-container">
+                <pre id="highlight-layer" aria-hidden="true"><code id="highlight-code"></code></pre>
                 <textarea id="editor" spellcheck="false" placeholder="# Write your Slang code here..."></textarea>
             </div>
         </div>
@@ -388,8 +424,101 @@
         let fps = 15;
         let renderTimeout = null;
 
+        const highlightLayer = document.getElementById('highlight-layer');
+        const highlightCode = document.getElementById('highlight-code');
+
+        // Syntax highlighting
+        const KEYWORDS = new Set([
+            'scene', 'set', 'draw', 'fade', 'move', 'wait', 'write',
+            'plot', 'change', 'scale', 'rotate', 'group', 'grow',
+            'spin', 'spiral', 'indicate', 'wiggle', 'circumscribe',
+            'flash', 'define', 'style', 'animate'
+        ]);
+        const MODIFIERS = new Set([
+            'at', 'to', 'with', 'over', 'color', 'size', 'radius',
+            'from', 'easing', 'in', 'out', 'the', 'a', 'an', 'of',
+            'by', 'everything', 'seconds', 'second', 'thickness',
+            'amplitude', 'frequency', 'math', 'background',
+            'resolution', 'fps', 'x'
+        ]);
+        const COLORS = new Set([
+            'red', 'green', 'blue', 'yellow', 'cyan', 'magenta',
+            'orange', 'pink', 'purple', 'white', 'black', 'grey',
+            'gray', 'dark', 'light', 'lime', 'teal', 'coral',
+            'salmon', 'gold', 'violet', 'indigo', 'crimson',
+            'tomato', 'turquoise', 'aqua', 'navy', 'maroon'
+        ]);
+
+        function escapeHtml(text) {
+            return text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+        }
+
+        function highlightLine(line) {
+            // Comment line
+            if (line.trimStart().startsWith('#')) {
+                return `<span class="hl-comment">${escapeHtml(line)}</span>`;
+            }
+
+            let result = '';
+            let i = 0;
+            while (i < line.length) {
+                // String literal
+                if (line[i] === '"') {
+                    let end = line.indexOf('"', i + 1);
+                    if (end === -1) end = line.length - 1;
+                    const str = line.slice(i, end + 1);
+                    result += `<span class="hl-string">${escapeHtml(str)}</span>`;
+                    i = end + 1;
+                    continue;
+                }
+                // Whitespace
+                if (/\s/.test(line[i])) {
+                    result += line[i];
+                    i++;
+                    continue;
+                }
+                // Word
+                const wordMatch = line.slice(i).match(/^[\w.]+/);
+                if (wordMatch) {
+                    const word = wordMatch[0];
+                    const lower = word.toLowerCase();
+                    // Number (including decimals like 1.5)
+                    if (/^\d+(\.\d+)?$/.test(word)) {
+                        result += `<span class="hl-number">${escapeHtml(word)}</span>`;
+                    } else if (KEYWORDS.has(lower)) {
+                        result += `<span class="hl-keyword">${escapeHtml(word)}</span>`;
+                    } else if (COLORS.has(lower)) {
+                        result += `<span class="hl-color">${escapeHtml(word)}</span>`;
+                    } else if (MODIFIERS.has(lower)) {
+                        result += `<span class="hl-modifier">${escapeHtml(word)}</span>`;
+                    } else {
+                        result += `<span class="hl-plain">${escapeHtml(word)}</span>`;
+                    }
+                    i += word.length;
+                    continue;
+                }
+                // Other chars (parens, operators, etc.)
+                result += `<span class="hl-plain">${escapeHtml(line[i])}</span>`;
+                i++;
+            }
+            return result;
+        }
+
+        function updateHighlight() {
+            const code = editor.value;
+            const lines = code.split('\n');
+            highlightCode.innerHTML = lines.map(highlightLine).join('\n') + '\n';
+            // Sync scroll
+            highlightLayer.scrollTop = editor.scrollTop;
+            highlightLayer.scrollLeft = editor.scrollLeft;
+        }
+
         // Load initial code
         editor.value = `{{INITIAL_CODE}}`;
+        updateHighlight();
 
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
@@ -403,12 +532,17 @@
             }
         });
 
-        // Auto-render with debounce
+        // Update highlight on input and scroll
         editor.addEventListener('input', () => {
+            updateHighlight();
             clearTimeout(renderTimeout);
             renderTimeout = setTimeout(() => {
                 renderPreview();
             }, 1500);
+        });
+        editor.addEventListener('scroll', () => {
+            highlightLayer.scrollTop = editor.scrollTop;
+            highlightLayer.scrollLeft = editor.scrollLeft;
         });
 
         async function renderPreview() {
@@ -781,6 +915,49 @@ fade out everything over 1 second`
 
             editor.value = examples[name] || examples.hello;
             renderPreview();
+        }
+
+        async function downloadMP4() {
+            const code = editor.value;
+            if (!code.trim()) return;
+
+            const btn = document.getElementById('download-btn');
+            const origText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = '⏳ Exporting...';
+            setStatus('rendering', 'Exporting full-quality MP4...');
+
+            try {
+                const response = await fetch('/export', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code })
+                });
+
+                const contentType = response.headers.get('Content-Type') || '';
+                if (contentType.includes('application/json')) {
+                    const data = await response.json();
+                    showError(data.error || 'Export failed');
+                    setStatus('error', 'Export failed');
+                } else {
+                    const blob = await response.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'slang_animation.mp4';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    setStatus('ok', 'MP4 downloaded!');
+                }
+            } catch (err) {
+                showError('Export failed: ' + err.message);
+                setStatus('error', 'Export error');
+            }
+
+            btn.disabled = false;
+            btn.textContent = origText;
         }
     </script>
 </body>

@@ -92,6 +92,43 @@ pub fn start_ide(file: Option<&str>, port: u16) {
                     .with_header(Header::from_bytes("Content-Type", "application/json").unwrap());
                 let _ = request.respond(response);
             }
+            ("POST", "/export") => {
+                let mut body = String::new();
+                let mut reader = request.as_reader();
+                let _ = std::io::Read::read_to_string(&mut reader, &mut body);
+
+                let source = if let Ok(json) = serde_json::from_str::<serde_json::Value>(&body) {
+                    json["code"].as_str().unwrap_or("").to_string()
+                } else {
+                    body
+                };
+
+                match render_to_mp4(&source) {
+                    Ok(mp4_bytes) => {
+                        let cursor = Cursor::new(mp4_bytes);
+                        let response = Response::new(
+                            tiny_http::StatusCode(200),
+                            vec![
+                                Header::from_bytes("Content-Type", "video/mp4").unwrap(),
+                                Header::from_bytes("Content-Disposition", "attachment; filename=\"slang_animation.mp4\"").unwrap(),
+                                Header::from_bytes("Access-Control-Allow-Origin", "*").unwrap(),
+                            ],
+                            cursor,
+                            None,
+                            None,
+                        );
+                        let _ = request.respond(response);
+                    }
+                    Err(err_msg) => {
+                        let response = Response::from_string(
+                            serde_json::json!({"error": err_msg}).to_string()
+                        )
+                            .with_header(Header::from_bytes("Content-Type", "application/json").unwrap())
+                            .with_header(Header::from_bytes("Access-Control-Allow-Origin", "*").unwrap());
+                        let _ = request.respond(response);
+                    }
+                }
+            }
             _ => {
                 let response = Response::from_string("Not Found")
                     .with_status_code(404);
@@ -221,4 +258,79 @@ wait 1 second
 
 fade out everything over 1 second
 "#.to_string()
+}
+
+fn render_to_mp4(source: &str) -> Result<Vec<u8>, String> {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+
+    // Lex
+    let mut lexer = Lexer::new(source);
+    let tokens = lexer.tokenize().map_err(|e| e.to_string())?;
+
+    // Parse
+    let mut parser = Parser::new(tokens);
+    let program = parser.parse().map_err(|e| e.to_string())?;
+
+    // Render at full quality
+    let mut renderer = Renderer::new();
+    let frames = renderer.render_program(&program);
+
+    if frames.is_empty() {
+        return Err("No frames to export".to_string());
+    }
+
+    // Create a temp file for the output
+    let tmp_path = std::env::temp_dir().join(format!("slang_export_{}.mp4", std::process::id()));
+    let tmp_str = tmp_path.to_string_lossy().to_string();
+
+    // Pipe frames through FFmpeg
+    let mut child = Command::new("ffmpeg")
+        .args([
+            "-y",
+            "-f", "rawvideo",
+            "-pixel_format", "rgba",
+            "-video_size", &format!("{}x{}", renderer.width, renderer.height),
+            "-framerate", &renderer.fps.to_string(),
+            "-i", "-",
+            "-c:v", "libx264",
+            "-pix_fmt", "yuv420p",
+            "-crf", "23",
+            "-preset", "fast",
+            "-movflags", "+faststart",
+            &tmp_str,
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Failed to start FFmpeg: {}", e))?;
+
+    {
+        let stdin = child.stdin.as_mut()
+            .ok_or_else(|| "Failed to open FFmpeg stdin".to_string())?;
+
+        for frame in &frames {
+            stdin.write_all(frame)
+                .map_err(|e| format!("Failed to write frame: {}", e))?;
+        }
+    }
+
+    let output = child.wait_with_output()
+        .map_err(|e| format!("FFmpeg process error: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let _ = std::fs::remove_file(&tmp_path);
+        return Err(format!("FFmpeg failed: {}", stderr));
+    }
+
+    // Read the MP4 file
+    let mp4_bytes = std::fs::read(&tmp_path)
+        .map_err(|e| format!("Failed to read output: {}", e))?;
+
+    // Clean up
+    let _ = std::fs::remove_file(&tmp_path);
+
+    Ok(mp4_bytes)
 }
