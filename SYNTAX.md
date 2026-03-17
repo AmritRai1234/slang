@@ -10,6 +10,14 @@ wait 1 second                              # Pause
 next scene                                 # Switch to next scene
 ```
 
+## Backgrounds
+```
+set background to dark blue                # Solid color
+set background to gradient blue purple     # Linear gradient (top→bottom)
+set background to radial dark blue black   # Radial gradient (center→edge)
+set background to noise dark blue          # Perlin noise texture
+```
+
 ## Shapes
 ```
 draw a circle at center with radius 100 color cyan
@@ -52,19 +60,44 @@ shrink the circle to radius 50 over 0.5 seconds
 highlight the triangle color yellow over 1 second
 ```
 
-## Easing
+## Manim-Style Animations
+```
+grow in the circle over 1 second           # GrowFromCenter
+spin in the square over 1.5 seconds        # SpinInFromNothing
+draw in the square over 1 second           # DrawBorderThenFill
+indicate the circle over 0.8 seconds       # Indicate (yellow pulse)
+wiggle the circle over 0.6 seconds         # Wiggle (shake)
+circumscribe the circle color yellow       # Circumscribe (highlight outline)
+spiral in the triangle over 1.5 seconds    # SpiralIn
+flash the circle color yellow              # Flash (expanding burst)
+```
+
+## Easing (30+ options)
 ```
 fade in the circle over 1 second easing bounce
-move the square to right over 2 seconds easing elastic
-# Options: smooth, bounce, elastic, spring, back, ease-in, ease-out, linear
+move the square to right over 2 seconds easing ease-out-expo
 ```
+
+| Family | In | Out | InOut |
+|--------|-----|------|-------|
+| Sine | ease-in-sine | ease-out-sine | sine |
+| Quad | ease-in-quad | ease-out-quad | quad |
+| Cubic | ease-in / smooth | ease-out | ease-in-out / cubic |
+| Quart | ease-in-quart | ease-out-quart | quart |
+| Quint | ease-in-quint | ease-out-quint | quint |
+| Expo | ease-in-expo | ease-out-expo | expo |
+| Circ | ease-in-circ | ease-out-circ | circ |
+| Back | ease-in-back | back | ease-in-out-back |
+| Elastic | ease-in-elastic | elastic | ease-in-out-elastic |
+| Bounce | ease-in-bounce | bounce | ease-in-out-bounce |
+| Other | spring | linear | |
 
 ## Positions
 `center` `top` `bottom` `left` `right` `(x, y)`
 
 ## Colors
 `red` `green` `blue` `white` `black` `yellow` `cyan` `magenta` `orange` `purple` `pink` `grey`
-`dark blue` `light green` `"#ff6b35"`
+`dark blue` `light green` `"#ff6b35"` `gradient cyan purple`
 
 ## Math Symbols
 `^{2}` sup · `_{n}` sub · `\frac{a}{b}` fraction · `\pi \alpha \theta \omega` greek · `\sum \sqrt \times \approx \infinity` operators
