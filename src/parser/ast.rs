@@ -11,6 +11,31 @@ pub struct Scene {
     pub body: Vec<Statement>,
 }
 
+/// Expression node for evaluated expressions
+#[derive(Debug, Clone)]
+pub enum Expr {
+    Number(f64),
+    StringLit(String),
+    Var(String),
+    BinOp(Box<Expr>, Op, Box<Expr>),
+    UnaryFunc(String, Box<Expr>),
+}
+
+#[derive(Debug, Clone)]
+pub enum Op {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Mod,
+    Gt,
+    Lt,
+    Eq,
+    Gte,
+    Lte,
+    NotEq,
+}
+
 #[derive(Debug)]
 pub enum Statement {
     Set {
@@ -63,6 +88,23 @@ pub enum Statement {
         color: ColorValue,
         count: usize,
         duration: f64,
+    },
+    /// Variable assignment: let x = expr
+    Let {
+        name: String,
+        expr: Expr,
+    },
+    /// Repeat loop: repeat N times [with i]
+    Repeat {
+        count: Expr,
+        counter: String,
+        body: Vec<Statement>,
+    },
+    /// Conditional: if expr ... else ...
+    If {
+        condition: Expr,
+        then_body: Vec<Statement>,
+        else_body: Vec<Statement>,
     },
 }
 

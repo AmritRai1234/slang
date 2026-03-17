@@ -30,6 +30,11 @@ pub enum TokenKind {
     Emit,
     Particles,
     Count,
+    Let,
+    Repeat,
+    Times,
+    If,
+    Else,
 
     // Connectors
     To,
@@ -103,6 +108,21 @@ pub enum TokenKind {
     Colon,
     Newline,
     Indent,
+
+    // Operators
+    Equals,
+    Plus,
+    Minus,
+    Star,
+    Slash,
+    Percent,
+    GreaterThan,
+    LessThan,
+    GreaterEqual,
+    LessEqual,
+    NotEqual,
+    LBrace,
+    RBrace,
 
     // End
     Eof,

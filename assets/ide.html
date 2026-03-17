@@ -489,14 +489,16 @@
             'plot', 'change', 'scale', 'rotate', 'group', 'grow',
             'spin', 'spiral', 'indicate', 'wiggle', 'circumscribe',
             'flash', 'define', 'style', 'animate',
-            'morph', 'zoom', 'pan', 'emit'
+            'morph', 'zoom', 'pan', 'emit',
+            'let', 'repeat', 'if', 'else'
         ]);
         const MODIFIERS = new Set([
             'at', 'to', 'with', 'over', 'color', 'size', 'radius',
             'from', 'easing', 'in', 'out', 'the', 'a', 'an', 'of',
             'by', 'everything', 'seconds', 'second', 'thickness',
             'amplitude', 'frequency', 'math', 'background',
-            'resolution', 'fps', 'x', 'into', 'count', 'particles'
+            'resolution', 'fps', 'x', 'into', 'count', 'particles',
+            'times', 'with'
         ]);
         const COLORS = new Set([
             'red', 'green', 'blue', 'yellow', 'cyan', 'magenta',
@@ -619,6 +621,10 @@
             { label: 'zoom out to 1x over 1 second', insert: 'zoom out to 1x over 1 second', tag: 'snippet' },
             { label: 'pan to ... over 1 second', insert: 'pan to center over 1 second', tag: 'snippet' },
             { label: 'emit particles at center color cyan count 50 over 2 seconds', insert: 'emit particles at center color cyan count 50 over 2 seconds', tag: 'snippet' },
+            // Variables & Loops
+            { label: 'let x = ...', insert: 'let  = ', cursor: -3, tag: 'snippet' },
+            { label: 'repeat N times with i', insert: 'repeat  times with i\n    ', cursor: -17, tag: 'snippet' },
+            { label: 'if ... then ...', insert: 'if  > 0\n    ', cursor: -7, tag: 'snippet' },
             // Timing
             { label: 'wait 1 second', insert: 'wait 1 second', tag: 'snippet' },
             { label: 'wait 0.5 seconds', insert: 'wait 0.5 seconds', tag: 'snippet' },

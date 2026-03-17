@@ -100,6 +100,10 @@ impl Parser {
             TokenKind::Zoom => self.parse_zoom(),
             TokenKind::Pan => self.parse_pan(),
             TokenKind::Emit => self.parse_emit(),
+            // Variables, loops, conditionals
+            TokenKind::Let => self.parse_let(),
+            TokenKind::Repeat => self.parse_repeat(),
+            TokenKind::If => self.parse_if(),
             // "spin in" and "draw in" start with Identifier
             TokenKind::Identifier => {
                 let word = self.current().value.clone().unwrap_or_default();
@@ -803,6 +807,224 @@ impl Parser {
             count,
             duration,
         })
+    }
+
+    // let x = 10 + 5
+    fn parse_let(&mut self) -> Result<Statement, ParseError> {
+        self.advance(); // skip 'let'
+        let name = self.expect_identifier_or_value()?;
+        self.expect(TokenKind::Equals)?;
+        let expr = self.parse_expr()?;
+        Ok(Statement::Let { name, expr })
+    }
+
+    // repeat 5 times [with i]
+    //     ...
+    fn parse_repeat(&mut self) -> Result<Statement, ParseError> {
+        self.advance(); // skip 'repeat'
+        let count = self.parse_expr()?;
+        // expect 'times'
+        if !self.is_line_end() && self.current().kind == TokenKind::Times {
+            self.advance();
+        }
+        // optional 'with counter_name'
+        let counter = if !self.is_line_end() && self.current().kind == TokenKind::With {
+            self.advance(); // skip 'with'
+            self.expect_identifier_or_value()?
+        } else {
+            "i".to_string()
+        };
+        self.skip_newlines();
+
+        let mut body = Vec::new();
+        while !self.is_at_end() && self.current().kind == TokenKind::Indent {
+            self.advance(); // skip indent
+            if self.is_at_end() || self.current().kind == TokenKind::Newline {
+                self.skip_newlines();
+                continue;
+            }
+            let stmt = self.parse_statement()?;
+            body.push(stmt);
+            self.skip_newlines();
+        }
+
+        Ok(Statement::Repeat { count, counter, body })
+    }
+
+    // if x > 5
+    //     ...
+    // else
+    //     ...
+    fn parse_if(&mut self) -> Result<Statement, ParseError> {
+        self.advance(); // skip 'if'
+        let condition = self.parse_expr()?;
+        self.skip_newlines();
+
+        let mut then_body = Vec::new();
+        while !self.is_at_end() && self.current().kind == TokenKind::Indent {
+            self.advance(); // skip indent
+            if self.is_at_end() || self.current().kind == TokenKind::Newline {
+                self.skip_newlines();
+                continue;
+            }
+            let stmt = self.parse_statement()?;
+            then_body.push(stmt);
+            self.skip_newlines();
+        }
+
+        let mut else_body = Vec::new();
+        if !self.is_at_end() && self.current().kind == TokenKind::Else {
+            self.advance(); // skip 'else'
+            self.skip_newlines();
+            while !self.is_at_end() && self.current().kind == TokenKind::Indent {
+                self.advance();
+                if self.is_at_end() || self.current().kind == TokenKind::Newline {
+                    self.skip_newlines();
+                    continue;
+                }
+                let stmt = self.parse_statement()?;
+                else_body.push(stmt);
+                self.skip_newlines();
+            }
+        }
+
+        Ok(Statement::If { condition, then_body, else_body })
+    }
+
+    // --- Expression parser (recursive descent with precedence) ---
+
+    fn parse_expr(&mut self) -> Result<Expr, ParseError> {
+        self.parse_comparison()
+    }
+
+    fn parse_comparison(&mut self) -> Result<Expr, ParseError> {
+        let mut left = self.parse_addition()?;
+        while !self.is_line_end() {
+            let op = match self.current().kind {
+                TokenKind::GreaterThan => Op::Gt,
+                TokenKind::LessThan => Op::Lt,
+                TokenKind::GreaterEqual => Op::Gte,
+                TokenKind::LessEqual => Op::Lte,
+                TokenKind::NotEqual => Op::NotEq,
+                // '=' '=' for equality (two equals tokens)
+                _ => break,
+            };
+            self.advance();
+            let right = self.parse_addition()?;
+            left = Expr::BinOp(Box::new(left), op, Box::new(right));
+        }
+        Ok(left)
+    }
+
+    fn parse_addition(&mut self) -> Result<Expr, ParseError> {
+        let mut left = self.parse_multiplication()?;
+        while !self.is_line_end() {
+            let op = match self.current().kind {
+                TokenKind::Plus => Op::Add,
+                TokenKind::Minus => Op::Sub,
+                _ => break,
+            };
+            self.advance();
+            let right = self.parse_multiplication()?;
+            left = Expr::BinOp(Box::new(left), op, Box::new(right));
+        }
+        Ok(left)
+    }
+
+    fn parse_multiplication(&mut self) -> Result<Expr, ParseError> {
+        let mut left = self.parse_unary()?;
+        while !self.is_line_end() {
+            let op = match self.current().kind {
+                TokenKind::Star => Op::Mul,
+                TokenKind::Slash => Op::Div,
+                TokenKind::Percent => Op::Mod,
+                _ => break,
+            };
+            self.advance();
+            let right = self.parse_unary()?;
+            left = Expr::BinOp(Box::new(left), op, Box::new(right));
+        }
+        Ok(left)
+    }
+
+    fn parse_unary(&mut self) -> Result<Expr, ParseError> {
+        if !self.is_line_end() && self.current().kind == TokenKind::Minus {
+            self.advance();
+            let expr = self.parse_primary()?;
+            return Ok(Expr::BinOp(
+                Box::new(Expr::Number(0.0)),
+                Op::Sub,
+                Box::new(expr),
+            ));
+        }
+        self.parse_primary()
+    }
+
+    fn parse_primary(&mut self) -> Result<Expr, ParseError> {
+        if self.is_line_end() {
+            let tok = self.tokens.get(self.pos.saturating_sub(1)).cloned().unwrap_or_else(|| {
+                Token::new(TokenKind::Eof, 0, 0)
+            });
+            return Err(ParseError {
+                message: "Expected expression".to_string(),
+                line: tok.line,
+                col: tok.col,
+            });
+        }
+
+        match self.current().kind {
+            TokenKind::NumberLit => {
+                let val: f64 = self.current().value.as_ref()
+                    .unwrap_or(&"0".to_string())
+                    .parse()
+                    .unwrap_or(0.0);
+                self.advance();
+                Ok(Expr::Number(val))
+            }
+            TokenKind::StringLit => {
+                let s = self.current().value.clone().unwrap_or_default();
+                self.advance();
+                Ok(Expr::StringLit(s))
+            }
+            TokenKind::LParen => {
+                self.advance(); // skip '('
+                let expr = self.parse_expr()?;
+                if !self.is_at_end() && self.current().kind == TokenKind::RParen {
+                    self.advance(); // skip ')'
+                }
+                Ok(expr)
+            }
+            TokenKind::Identifier => {
+                let name = self.current().value.clone().unwrap_or_default();
+                self.advance();
+                // Check for function call: name(expr)
+                if !self.is_at_end() && self.current().kind == TokenKind::LParen {
+                    self.advance(); // skip '('
+                    let arg = self.parse_expr()?;
+                    if !self.is_at_end() && self.current().kind == TokenKind::RParen {
+                        self.advance(); // skip ')'
+                    }
+                    Ok(Expr::UnaryFunc(name, Box::new(arg)))
+                } else {
+                    Ok(Expr::Var(name))
+                }
+            }
+            _ => {
+                // Try to treat other keyword tokens as variable names
+                let tok = self.current().clone();
+                let val = tok.value.clone().unwrap_or_default();
+                if !val.is_empty() {
+                    self.advance();
+                    Ok(Expr::Var(val))
+                } else {
+                    Err(ParseError {
+                        message: format!("Expected expression, got {:?}", tok.kind),
+                        line: tok.line,
+                        col: tok.col,
+                    })
+                }
+            }
+        }
     }
 
     // group triangle_demo:

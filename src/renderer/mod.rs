@@ -5,10 +5,12 @@ pub mod text;
 pub mod export;
 pub mod plotting;
 pub mod backgrounds;
+pub mod eval;
 
 use crate::parser::ast::*;
 use scene::SceneState;
 use text::TextRenderer;
+use eval::Env;
 
 /// The main renderer. Takes a parsed Program and renders it to frames.
 pub struct Renderer {
@@ -49,8 +51,9 @@ impl Renderer {
     fn render_scene(&mut self, scene: &Scene) -> Vec<Vec<u8>> {
         let mut state = SceneState::new(self.width as f64, self.height as f64);
         let mut frames: Vec<Vec<u8>> = Vec::new();
+        let mut env = Env::new();
 
-        // First pass: apply settings
+        // First pass: apply settings and styles
         for stmt in &scene.body {
             if let Statement::Set { property, value } = stmt {
                 self.apply_setting(property, value);
@@ -60,29 +63,45 @@ impl Renderer {
             }
         }
 
-        // Second pass: process draw/animate/wait
-        for stmt in &scene.body {
+        // Second pass: process all statements with environment
+        self.process_statements(&scene.body, &mut state, &mut frames, &mut env);
+
+        if frames.is_empty() {
+            frames.push(self.render_frame(&state));
+        }
+
+        frames
+    }
+
+    fn process_statements(
+        &mut self,
+        stmts: &[Statement],
+        state: &mut SceneState,
+        frames: &mut Vec<Vec<u8>>,
+        env: &mut Env,
+    ) {
+        for stmt in stmts {
             match stmt {
                 Statement::Set { .. } | Statement::StyleDef { .. } => {
-                    // Already handled
+                    // Already handled in first pass
                 }
                 Statement::Draw { name, shape, position, properties, end_position } => {
                     state.add_shape(name.clone(), shape.clone(), position.clone(), properties.clone(), end_position.clone());
-                    frames.push(self.render_frame(&state));
+                    frames.push(self.render_frame(state));
                 }
                 Statement::Animate { kind, target, duration, easing } => {
-                    let anim_frames = self.render_animation(&mut state, kind, target, *duration, easing);
+                    let anim_frames = self.render_animation(state, kind, target, *duration, easing);
                     frames.extend(anim_frames);
                 }
                 Statement::Wait { duration } => {
                     let frame_count = (*duration * self.fps as f64) as usize;
-                    let frame = self.render_frame(&state);
+                    let frame = self.render_frame(state);
                     for _ in 0..frame_count {
                         frames.push(frame.clone());
                     }
                 }
                 Statement::Write { content, position, color, size, duration } => {
-                    let anim_frames = self.render_write(&mut state, content, position, color, *size, *duration);
+                    let anim_frames = self.render_write(state, content, position, color, *size, *duration);
                     frames.extend(anim_frames);
                 }
                 Statement::Group { name, body } => {
@@ -92,28 +111,40 @@ impl Renderer {
                         }
                     }
                     let _ = name;
-                    frames.push(self.render_frame(&state));
+                    frames.push(self.render_frame(state));
                 }
                 Statement::Plot { expr, x_range, y_range, color, thickness, duration } => {
                     let plot_frames = self.render_plot(
-                        &mut state, expr, *x_range, *y_range, color, *thickness, *duration,
+                        state, expr, *x_range, *y_range, color, *thickness, *duration,
                     );
                     frames.extend(plot_frames);
                 }
                 Statement::Emit { position, color, count, duration } => {
                     let emit_frames = self.render_emit(
-                        &mut state, position, color, *count, *duration,
+                        state, position, color, *count, *duration,
                     );
                     frames.extend(emit_frames);
                 }
+                Statement::Let { name, expr } => {
+                    let value = eval::eval_expr(expr, env);
+                    env.insert(name.clone(), value);
+                }
+                Statement::Repeat { count, counter, body } => {
+                    let n = eval::eval_expr(count, env) as usize;
+                    for i in 0..n {
+                        env.insert(counter.clone(), i as f64);
+                        self.process_statements(body, state, frames, env);
+                    }
+                }
+                Statement::If { condition, then_body, else_body } => {
+                    if eval::eval_truthy(condition, env) {
+                        self.process_statements(then_body, state, frames, env);
+                    } else if !else_body.is_empty() {
+                        self.process_statements(else_body, state, frames, env);
+                    }
+                }
             }
         }
-
-        if frames.is_empty() {
-            frames.push(self.render_frame(&state));
-        }
-
-        frames
     }
 
     fn apply_setting(&mut self, property: &str, value: &Value) {

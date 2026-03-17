@@ -67,7 +67,68 @@ impl Lexer {
                     tokens.push(Token::new(TokenKind::Colon, self.line, self.col));
                     self.advance();
                 }
-                _ if ch.is_ascii_digit() || (ch == '-' && self.peek_next().map_or(false, |c| c.is_ascii_digit())) => {
+                '=' => {
+                    tokens.push(Token::new(TokenKind::Equals, self.line, self.col));
+                    self.advance();
+                }
+                '+' => {
+                    tokens.push(Token::new(TokenKind::Plus, self.line, self.col));
+                    self.advance();
+                }
+                '*' => {
+                    tokens.push(Token::new(TokenKind::Star, self.line, self.col));
+                    self.advance();
+                }
+                '/' => {
+                    tokens.push(Token::new(TokenKind::Slash, self.line, self.col));
+                    self.advance();
+                }
+                '%' => {
+                    tokens.push(Token::new(TokenKind::Percent, self.line, self.col));
+                    self.advance();
+                }
+                '>' => {
+                    if self.peek_next() == Some('=') {
+                        tokens.push(Token::new(TokenKind::GreaterEqual, self.line, self.col));
+                        self.advance();
+                        self.advance();
+                    } else {
+                        tokens.push(Token::new(TokenKind::GreaterThan, self.line, self.col));
+                        self.advance();
+                    }
+                }
+                '<' => {
+                    if self.peek_next() == Some('=') {
+                        tokens.push(Token::new(TokenKind::LessEqual, self.line, self.col));
+                        self.advance();
+                        self.advance();
+                    } else {
+                        tokens.push(Token::new(TokenKind::LessThan, self.line, self.col));
+                        self.advance();
+                    }
+                }
+                '!' => {
+                    if self.peek_next() == Some('=') {
+                        tokens.push(Token::new(TokenKind::NotEqual, self.line, self.col));
+                        self.advance();
+                        self.advance();
+                    } else {
+                        return Err(LexError {
+                            message: format!("Unexpected character '{}'", ch),
+                            line: self.line,
+                            col: self.col,
+                        });
+                    }
+                }
+                '{' => {
+                    tokens.push(Token::new(TokenKind::LBrace, self.line, self.col));
+                    self.advance();
+                }
+                '}' => {
+                    tokens.push(Token::new(TokenKind::RBrace, self.line, self.col));
+                    self.advance();
+                }
+                _ if ch.is_ascii_digit() || (ch == '-' && self.peek_next().map_or(false, |c| c.is_ascii_digit()) && !self.last_was_value(&tokens)) => {
                     let num = self.read_number();
                     // Check for resolution like 1920x1080
                     if self.pos < self.input.len() && self.input[self.pos] == 'x' {
@@ -83,6 +144,11 @@ impl Lexer {
                     } else {
                         tokens.push(Token::with_value(TokenKind::NumberLit, num, self.line, self.col));
                     }
+                }
+                '-' => {
+                    // Minus operator (not negative number)
+                    tokens.push(Token::new(TokenKind::Minus, self.line, self.col));
+                    self.advance();
                 }
                 _ if ch.is_alphabetic() || ch == '_' => {
                     let word = self.read_word();
@@ -115,6 +181,30 @@ impl Lexer {
                 self.col += 1;
             }
             self.pos += 1;
+        }
+    }
+
+    /// Check if the last token was a value (number, identifier, rparen) —
+    /// used to distinguish minus operator from negative number prefix.
+    fn last_was_value(&self, tokens: &[Token]) -> bool {
+        if let Some(last) = tokens.last() {
+            matches!(
+                last.kind,
+                TokenKind::NumberLit
+                    | TokenKind::Identifier
+                    | TokenKind::RParen
+                    | TokenKind::RBrace
+                    | TokenKind::StringLit
+                    | TokenKind::Circle
+                    | TokenKind::Square
+                    | TokenKind::Triangle
+                    | TokenKind::Everything
+                    | TokenKind::XSuffix
+                    | TokenKind::Second
+                    | TokenKind::Times
+            )
+        } else {
+            false
         }
     }
 
@@ -243,6 +333,11 @@ impl Lexer {
             "emit" => TokenKind::Emit,
             "particles" | "particle" => TokenKind::Particles,
             "count" => TokenKind::Count,
+            "let" => TokenKind::Let,
+            "repeat" => TokenKind::Repeat,
+            "times" | "time" => TokenKind::Times,
+            "if" => TokenKind::If,
+            "else" => TokenKind::Else,
 
             // Connectors
             "to" => TokenKind::To,
