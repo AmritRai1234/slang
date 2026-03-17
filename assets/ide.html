@@ -170,6 +170,61 @@
         .hl-color    { color: #f472b6; }
         .hl-plain    { color: #e2e8f0; }
 
+        /* Autocomplete dropdown */
+        .autocomplete {
+            position: absolute;
+            background: #1e1e2e;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            max-height: 220px;
+            overflow-y: auto;
+            z-index: 50;
+            min-width: 280px;
+            max-width: 500px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            display: none;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+        }
+        .autocomplete.visible { display: block; }
+        .ac-item {
+            padding: 6px 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: background 0.1s;
+        }
+        .ac-item:first-child { border-radius: 8px 8px 0 0; }
+        .ac-item:last-child { border-radius: 0 0 8px 8px; }
+        .ac-item.selected, .ac-item:hover {
+            background: rgba(0, 212, 255, 0.15);
+        }
+        .ac-label {
+            flex: 1;
+            color: var(--text);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .ac-label .ac-match { color: var(--accent); font-weight: 700; }
+        .ac-tag {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+        .ac-tag.keyword  { background: rgba(0,212,255,0.15); color: var(--accent); }
+        .ac-tag.snippet  { background: rgba(124,58,237,0.15); color: var(--accent2); }
+        .ac-tag.color    { background: rgba(244,114,182,0.15); color: #f472b6; }
+        .ac-hint {
+            font-size: 11px;
+            color: var(--muted);
+            padding: 4px 12px;
+            border-top: 1px solid var(--border);
+        }
+
         /* Preview Panel */
         .preview-panel {
             width: 50%;
@@ -360,6 +415,7 @@
             <div class="editor-container">
                 <pre id="highlight-layer" aria-hidden="true"><code id="highlight-code"></code></pre>
                 <textarea id="editor" spellcheck="false" placeholder="# Write your Slang code here..."></textarea>
+                <div class="autocomplete" id="autocomplete"></div>
             </div>
         </div>
 
@@ -520,7 +576,222 @@
         editor.value = `{{INITIAL_CODE}}`;
         updateHighlight();
 
+        // ===== AUTOCOMPLETE =====
+        const acBox = document.getElementById('autocomplete');
+        let acItems = [];
+        let acIndex = -1;
+        let acVisible = false;
+
+        const SNIPPETS = [
+            // Scenes & Settings
+            { label: 'scene "..."', insert: 'scene ""', cursor: -1, tag: 'snippet' },
+            { label: 'set background to ...', insert: 'set background to ', tag: 'snippet' },
+            { label: 'set fps to 30', insert: 'set fps to 30', tag: 'snippet' },
+            { label: 'set resolution to 1920x1080', insert: 'set resolution to 1920x1080', tag: 'snippet' },
+            // Drawing
+            { label: 'draw a circle at center with radius 100 color cyan', insert: 'draw a circle at center with radius 100 color cyan', tag: 'snippet' },
+            { label: 'draw a square at center with size 100 color yellow', insert: 'draw a square at center with size 100 color yellow', tag: 'snippet' },
+            { label: 'draw a triangle at center with size 100 color pink', insert: 'draw a triangle at center with size 100 color pink', tag: 'snippet' },
+            { label: 'draw math "..." at center color cyan size 64', insert: 'draw math "" at center color cyan size 64', cursor: -27, tag: 'snippet' },
+            { label: 'draw axes at center with size 400 color grey', insert: 'draw axes at center with size 400 color grey thickness 2', tag: 'snippet' },
+            { label: 'draw a grid at center with size 400 color grey', insert: 'draw a grid at center with size 400 color grey thickness 1', tag: 'snippet' },
+            { label: 'draw a wave at center with size 600 amplitude 80 frequency 3 color cyan', insert: 'draw a wave at center with size 600 amplitude 80 frequency 3 color cyan thickness 3', tag: 'snippet' },
+            // Text
+            { label: 'write "..." at top color white size 48 over 1 second', insert: 'write "" at top color white size 48 over 1 second', cursor: -40, tag: 'snippet' },
+            // Animations
+            { label: 'fade in ... over 1 second', insert: 'fade in the  over 1 second', cursor: -15, tag: 'snippet' },
+            { label: 'fade out ... over 1 second', insert: 'fade out the  over 1 second', cursor: -15, tag: 'snippet' },
+            { label: 'fade out everything over 1.5 seconds', insert: 'fade out everything over 1.5 seconds', tag: 'snippet' },
+            { label: 'move ... to ... over 1 second', insert: 'move the  to center over 1 second', cursor: -24, tag: 'snippet' },
+            { label: 'scale ... to 1.5 x over 1 second', insert: 'scale the  to 1.5 x over 1 second', cursor: -24, tag: 'snippet' },
+            { label: 'rotate ... by 360 over 1 second', insert: 'rotate the  by 360 over 1 second', cursor: -22, tag: 'snippet' },
+            { label: 'change color of ... to ... over 1 second', insert: 'change color of the  to cyan over 1 second', cursor: -25, tag: 'snippet' },
+            { label: 'grow in ... over 1 second', insert: 'grow in the  over 1 second', cursor: -15, tag: 'snippet' },
+            { label: 'spin in ... over 1.5 seconds', insert: 'spin in the  over 1.5 seconds', cursor: -17, tag: 'snippet' },
+            { label: 'spiral in ... over 1.5 seconds', insert: 'spiral in the  over 1.5 seconds', cursor: -17, tag: 'snippet' },
+            { label: 'indicate ... over 0.8 seconds', insert: 'indicate the  over 0.8 seconds', cursor: -18, tag: 'snippet' },
+            { label: 'wiggle ... over 0.6 seconds', insert: 'wiggle the  over 0.6 seconds', cursor: -18, tag: 'snippet' },
+            { label: 'circumscribe ... color yellow over 1 second', insert: 'circumscribe the  color yellow over 1 second', cursor: -28, tag: 'snippet' },
+            // Timing
+            { label: 'wait 1 second', insert: 'wait 1 second', tag: 'snippet' },
+            { label: 'wait 0.5 seconds', insert: 'wait 0.5 seconds', tag: 'snippet' },
+            { label: 'wait 2 seconds', insert: 'wait 2 seconds', tag: 'snippet' },
+            // Plotting
+            { label: 'plot "sin({x})" from -5 to 5 color cyan over 2 seconds', insert: 'plot "sin({x})" from -5 to 5 color cyan thickness 3 over 2 seconds', tag: 'snippet' },
+            // Groups
+            { label: 'group "..." { ... }', insert: 'group "" {\n    \n}', cursor: -7, tag: 'snippet' },
+        ];
+
+        // Build keyword entries from the existing sets
+        const ALL_WORDS = [];
+        KEYWORDS.forEach(w => ALL_WORDS.push({ label: w, insert: w, tag: 'keyword' }));
+        COLORS.forEach(w => ALL_WORDS.push({ label: w, insert: w, tag: 'color' }));
+
+        function getWordBeforeCursor() {
+            const pos = editor.selectionStart;
+            const text = editor.value;
+            // Find start of current line
+            let lineStart = text.lastIndexOf('\n', pos - 1) + 1;
+            let lineText = text.slice(lineStart, pos);
+            // Get the partial text on this line (for snippet matching)
+            let wordMatch = lineText.match(/(\S+)$/);
+            return { word: wordMatch ? wordMatch[1] : '', lineText: lineText.trimStart(), lineStart, pos };
+        }
+
+        function filterCompletions(input) {
+            const lower = input.toLowerCase();
+            if (!lower) return [];
+            let results = [];
+            // Match snippets by prefix of the label (check if any word in label starts with input)
+            for (const s of SNIPPETS) {
+                if (s.label.toLowerCase().startsWith(lower) ||
+                    s.label.toLowerCase().includes(' ' + lower)) {
+                    results.push(s);
+                }
+            }
+            // Match individual keywords/colors
+            for (const w of ALL_WORDS) {
+                if (w.label.startsWith(lower) && w.label !== lower) {
+                    results.push(w);
+                }
+            }
+            return results.slice(0, 8);
+        }
+
+        function highlightMatch(label, input) {
+            const lower = label.toLowerCase();
+            const idx = lower.indexOf(input.toLowerCase());
+            if (idx === -1) return escapeHtml(label);
+            const before = label.slice(0, idx);
+            const match = label.slice(idx, idx + input.length);
+            const after = label.slice(idx + input.length);
+            return escapeHtml(before) + '<span class="ac-match">' + escapeHtml(match) + '</span>' + escapeHtml(after);
+        }
+
+        function showAutocomplete() {
+            const { word, lineText, lineStart, pos } = getWordBeforeCursor();
+            // Use entire line content for snippet matching, individual word for keywords
+            const matches = filterCompletions(lineText || word);
+            if (matches.length === 0) {
+                hideAutocomplete();
+                return;
+            }
+
+            acItems = matches;
+            acIndex = 0;
+            acBox.innerHTML = matches.map((m, i) =>
+                `<div class="ac-item${i === 0 ? ' selected' : ''}" data-index="${i}">` +
+                `<span class="ac-label">${highlightMatch(m.label, lineText || word)}</span>` +
+                `<span class="ac-tag ${m.tag}">${m.tag}</span></div>`
+            ).join('') + '<div class="ac-hint">Tab or Enter to insert · Esc to dismiss</div>';
+
+            // Position the dropdown
+            positionAutocomplete();
+            acBox.classList.add('visible');
+            acVisible = true;
+
+            // Click handlers
+            acBox.querySelectorAll('.ac-item').forEach(el => {
+                el.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    acIndex = parseInt(el.dataset.index);
+                    acceptCompletion();
+                });
+            });
+        }
+
+        function positionAutocomplete() {
+            // Approximate position based on cursor
+            const text = editor.value.slice(0, editor.selectionStart);
+            const lines = text.split('\n');
+            const lineNum = lines.length;
+            const lineHeight = 14 * 1.7; // font-size * line-height
+            const top = (lineNum * lineHeight) + 20 - editor.scrollTop;
+            const charWidth = 8.4; // approx monospace char width at 14px
+            const left = Math.min(lines[lines.length - 1].length * charWidth + 20, 400);
+            acBox.style.top = Math.min(top, editor.offsetHeight - 240) + 'px';
+            acBox.style.left = left + 'px';
+        }
+
+        function hideAutocomplete() {
+            acBox.classList.remove('visible');
+            acVisible = false;
+            acItems = [];
+            acIndex = -1;
+        }
+
+        function acceptCompletion() {
+            if (acIndex < 0 || acIndex >= acItems.length) return;
+            const item = acItems[acIndex];
+            const pos = editor.selectionStart;
+            const text = editor.value;
+            // Find start of current line
+            let lineStart = text.lastIndexOf('\n', pos - 1) + 1;
+
+            if (item.tag === 'snippet') {
+                // Replace entire current line content
+                const before = text.slice(0, lineStart);
+                const after = text.slice(pos);
+                // Preserve leading whitespace
+                const currentLine = text.slice(lineStart, pos);
+                const indent = currentLine.match(/^(\s*)/)[1];
+                const newText = indent + item.insert;
+                editor.value = before + newText + after;
+                const newPos = lineStart + newText.length + (item.cursor || 0);
+                editor.selectionStart = editor.selectionEnd = newPos;
+            } else {
+                // Replace just the current word
+                const beforeLine = text.slice(0, pos);
+                const wordMatch = beforeLine.match(/(\S+)$/);
+                const wordStart = wordMatch ? pos - wordMatch[1].length : pos;
+                const before = text.slice(0, wordStart);
+                const after = text.slice(pos);
+                editor.value = before + item.insert + after;
+                const newPos = wordStart + item.insert.length;
+                editor.selectionStart = editor.selectionEnd = newPos;
+            }
+
+            hideAutocomplete();
+            updateHighlight();
+        }
+
         // Keyboard shortcuts
+        editor.addEventListener('keydown', (e) => {
+            if (acVisible) {
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    acIndex = (acIndex + 1) % acItems.length;
+                    updateAcSelection();
+                    return;
+                }
+                if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    acIndex = (acIndex - 1 + acItems.length) % acItems.length;
+                    updateAcSelection();
+                    return;
+                }
+                if (e.key === 'Tab' || e.key === 'Enter') {
+                    e.preventDefault();
+                    acceptCompletion();
+                    return;
+                }
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    hideAutocomplete();
+                    return;
+                }
+            }
+        });
+
+        function updateAcSelection() {
+            acBox.querySelectorAll('.ac-item').forEach((el, i) => {
+                el.classList.toggle('selected', i === acIndex);
+            });
+            // Scroll selected into view
+            const selected = acBox.querySelector('.ac-item.selected');
+            if (selected) selected.scrollIntoView({ block: 'nearest' });
+        }
+
         document.addEventListener('keydown', (e) => {
             if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
                 e.preventDefault();
@@ -532,9 +803,10 @@
             }
         });
 
-        // Update highlight on input and scroll
+        // Update highlight + autocomplete on input, sync scroll
         editor.addEventListener('input', () => {
             updateHighlight();
+            showAutocomplete();
             clearTimeout(renderTimeout);
             renderTimeout = setTimeout(() => {
                 renderPreview();
@@ -543,6 +815,12 @@
         editor.addEventListener('scroll', () => {
             highlightLayer.scrollTop = editor.scrollTop;
             highlightLayer.scrollLeft = editor.scrollLeft;
+        });
+        // Hide autocomplete when clicking outside editor
+        document.addEventListener('click', (e) => {
+            if (!editor.contains(e.target) && !acBox.contains(e.target)) {
+                hideAutocomplete();
+            }
         });
 
         async function renderPreview() {
